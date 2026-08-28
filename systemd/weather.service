@@ -12,9 +12,6 @@ ExecStart=/usr/bin/python3 -u /home/birduser/weather/weather.py
 Restart=always
 RestartSec=30
 
-# Wait until networking is fully online
-After=network-online.target
-Wants=network-online.target
 
 # Automatically create a log entry in the journal
 StandardOutput=journal

@@ -38,3 +38,15 @@ sudo systemctl enable --now weather.service
 
 systemctl status weather.service --no-pager
 tail -f /var/log/weather/weather.log
+
+## PostgreSQL Support
+
+Weather observations are also stored permanently in PostgreSQL.
+
+Install the PostgreSQL Python driver used by the system Python environment:
+
+    sudo apt install -y python3-psycopg
+
+The weather service connects to the `birdnet` PostgreSQL database using the local PostgreSQL client configuration.
+
+Database credentials must not be stored in Git.

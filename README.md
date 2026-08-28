@@ -43,20 +43,20 @@ A small Python service retrieves weather information from Open-Meteo every 15 mi
           |
           v
       weather.py
-          |
-          v
-    /var/log/weather/weather.log
-          |
-          v
-      Grafana Alloy
-          |
-          v
-    Grafana Cloud Loki
-          |
-          v
-        Grafana
+        /       \
+       v         v
+ weather.log   PostgreSQL
+       |
+       v
+ Grafana Alloy
+       |
+       v
+ Grafana Cloud Loki
+       |
+       v
+    Grafana
 
-Weather records are written as one JSON object per line.
+Weather records are written as one JSON object per line for Alloy/Loki and are also stored in PostgreSQL for permanent historical analysis.
 
 Collected fields include:
 
@@ -300,6 +300,8 @@ It queries the Open-Meteo forecast API and writes to:
     /var/log/weather/weather.log
 
 The service runs continuously and waits 900 seconds between requests.
+
+Each successful collection is written both to the JSONL weather log and to the PostgreSQL `weather_observations` table.
 
 Example record:
 
