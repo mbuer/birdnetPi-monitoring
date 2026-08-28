@@ -8,7 +8,14 @@ CREATE TABLE detections (
     station_id TEXT NOT NULL DEFAULT 'birdnet',
     species TEXT NOT NULL,
     species_latin TEXT,
-    confidence DOUBLE PRECISION
+    confidence DOUBLE PRECISION,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    cutoff DOUBLE PRECISION,
+    week INTEGER,
+    sensitivity DOUBLE PRECISION,
+    overlap DOUBLE PRECISION,
+    file_name TEXT
 );
 
 CREATE INDEX idx_detections_detected_at
@@ -16,6 +23,9 @@ CREATE INDEX idx_detections_detected_at
 
 CREATE INDEX idx_detections_species
     ON detections (species);
+
+CREATE UNIQUE INDEX idx_detections_unique
+    ON detections (detected_at, species_latin, file_name);
 
 
 CREATE TABLE weather_observations (

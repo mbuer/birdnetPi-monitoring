@@ -35,6 +35,29 @@ Alloy extracts information from BirdNET detection messages including:
 - confidence
 - confidence interval
 
+### BirdNET detection database
+
+BirdNET stores detections in its native SQLite database:
+
+    ~/BirdNET-Pi/scripts/birds.db
+
+The `collector/import_detections.py` importer copies new detections into PostgreSQL while preserving BirdNET metadata such as confidence, location, cutoff, sensitivity, overlap, and source filename.
+
+A systemd timer runs the synchronization approximately once per minute:
+
+    birdnet-db-sync.timer
+        |
+        v
+    birdnet-db-sync.service
+        |
+        v
+    collector/import_detections.py
+        |
+        v
+    PostgreSQL detections
+
+A unique PostgreSQL index prevents the same BirdNET detection from being imported more than once.
+
 ### Weather
 
 A small Python service retrieves weather information from Open-Meteo every 15 minutes:
@@ -85,13 +108,18 @@ The current weather configuration uses Fahrenheit and mph.
     │   ├── weather.py
     │   └── requirements.txt
     │
+    ├── collector/
+    │   └── import_detections.py
+    │
     ├── database/
     │   ├── schema.sql
     │   └── README.md
     │
     ├── systemd/
     │   ├── alloy.service.txt
-    │   └── weather.service
+    │   ├── weather.service
+    │   ├── birdnet-db-sync.service
+    │   └── birdnet-db-sync.timer
     │
     ├── grafana/
     │   └── Bird Home - Burbank.json
@@ -125,11 +153,11 @@ The recommended restore order is:
 
 1. Install and verify BirdNET-Pi
 2. Clone this repository
-3. Restore the weather logger
-4. Install and initialize PostgreSQL
-5. Install and configure Grafana Alloy
-6. Add Grafana Cloud credentials
-7. Start the services
+3. Install and initialize PostgreSQL
+4. Restore the weather logger
+5. Restore BirdNET detection synchronization
+6. Install and configure Grafana Alloy
+7. Add Grafana Cloud credentials
 8. Import the Grafana dashboard
 9. Verify end-to-end ingestion
 
@@ -143,22 +171,58 @@ Keeping BirdNET itself separate from this repository makes it easier to update o
 
 HTTPS can also be used if SSH access has not yet been configured.
 
-## 2. Restore the Weather Logger
+## 2. Install and Initialize PostgreSQL
+
+Install PostgreSQL and the Python PostgreSQL driver:
+
+    sudo apt update
+    sudo apt install -y postgresql python3-psycopg
+
+Create the application role and database:
+
+    sudo -u postgres psql
+
+Then run:
+
+    CREATE USER birdnet WITH PASSWORD 'YOUR_PASSWORD';
+    CREATE DATABASE birdnet OWNER birdnet;
+    \q
+
+Apply the repository schema:
+
+    psql -h localhost -U birdnet -d birdnet -f database/schema.sql
+
+Create `~/.pgpass` so the weather logger and BirdNET detection importer can connect without storing the password in repository files:
+
+    echo "localhost:5432:birdnet:birdnet:YOUR_PASSWORD" > ~/.pgpass
+    chmod 600 ~/.pgpass
+
+Verify PostgreSQL:
+
+    pg_isready
+    psql -h localhost -U birdnet -d birdnet -c "\dt"
+
+Expected tables:
+
+    detections
+    weather_observations
+    weather_forecasts
+
+For additional database information see:
+
+    database/README.md
+
+## 3. Restore the Weather Logger
 
 Install Python requirements:
 
     sudo apt update
-    sudo apt install -y python3-pip python3-venv
+    sudo apt install -y python3-requests python3-psycopg
 
 Create the runtime directory:
 
     mkdir -p ~/weather
     cp weather/weather.py ~/weather/weather.py
-
-Create a dedicated Python virtual environment:
-
-    python3 -m venv ~/weather/.venv
-    ~/weather/.venv/bin/pip install -r weather/requirements.txt
 
 Create the weather log directory:
 
@@ -170,14 +234,6 @@ Install the systemd service:
     sudo cp systemd/weather.service /etc/systemd/system/weather.service
     sudo systemctl daemon-reload
     sudo systemctl enable --now weather.service
-
-NOTE:
-
-The saved service currently reflects the working installation. Check that its ExecStart points to the Python interpreter you intend to use.
-
-If using the virtual environment above, the preferred command is:
-
-    ExecStart=/home/birduser/weather/.venv/bin/python -u /home/birduser/weather/weather.py
 
 Verify the service:
 
@@ -197,7 +253,34 @@ For additional information see:
 
     docs/weather-setup.md
 
-## 3. Install Grafana Alloy
+## 4. Restore BirdNET Detection Synchronization
+
+BirdNET stores detections in its native SQLite database:
+
+    ~/BirdNET-Pi/scripts/birds.db
+
+Install the PostgreSQL Python driver:
+
+    sudo apt install -y python3-psycopg
+
+Install the synchronization service and timer:
+
+    sudo cp systemd/birdnet-db-sync.service /etc/systemd/system/
+    sudo cp systemd/birdnet-db-sync.timer /etc/systemd/system/
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now birdnet-db-sync.timer
+
+The importer automatically backfills existing BirdNET detections and ignores detections already present in PostgreSQL.
+
+Verify the timer:
+
+    systemctl list-timers birdnet-db-sync.timer --no-pager
+
+Verify synchronization:
+
+    journalctl -u birdnet-db-sync.service -n 20 --no-pager
+
+## 5. Install Grafana Alloy
 
 Install Grafana Alloy using Grafana's official Debian/Raspberry Pi installation instructions.
 
@@ -213,7 +296,7 @@ The package-managed systemd service is documented in:
 
 Do not blindly replace the package-provided Alloy systemd service with this file. It is primarily preserved as documentation of the known-working installation.
 
-## 4. Restore Alloy Configuration
+## 6. Restore Alloy Configuration
 
 Copy the saved configuration:
 
@@ -380,6 +463,34 @@ Finally verify in Grafana that:
 - dashboard panels return data
 
 ---
+
+# Individual Health Checks
+
+BirdNET analysis:
+
+    systemctl status birdnet_analysis.service --no-pager
+    journalctl -u birdnet_analysis.service -n 20 --no-pager
+
+Weather collection:
+
+    systemctl status weather.service --no-pager
+    journalctl -u weather.service -n 20 --no-pager
+
+Grafana Alloy:
+
+    systemctl status alloy.service --no-pager
+    journalctl -u alloy.service -n 20 --no-pager
+
+PostgreSQL:
+
+    pg_isready
+
+BirdNET to PostgreSQL synchronization:
+
+    systemctl list-timers birdnet-db-sync.timer --no-pager
+    journalctl -u birdnet-db-sync.service -n 20 --no-pager
+
+`birdnet-db-sync.service` is a oneshot service and normally returns to `inactive (dead)` after a successful synchronization. The `birdnet-db-sync.timer` should remain active.
 
 # Runtime Data
 

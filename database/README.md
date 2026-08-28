@@ -30,6 +30,18 @@ Stores BirdNET detections including:
 - common species name
 - scientific species name
 - confidence
+- latitude and longitude
+- BirdNET cutoff
+- BirdNET week
+- sensitivity
+- overlap
+- source audio filename
+
+Detections originate from BirdNET's native SQLite database at:
+
+    ~/BirdNET-Pi/scripts/birds.db
+
+`collector/import_detections.py` synchronizes these records into PostgreSQL. The `birdnet-db-sync.timer` runs the importer approximately once per minute. Duplicate imports are prevented by a unique index on the detection timestamp, scientific species name, and source filename.
 
 ### weather_observations
 
@@ -94,11 +106,16 @@ Do not commit:
 
 Credentials should remain outside the Git repository.
 
-## Next Steps
+## Current Ingestion
 
-- ingest BirdNET detections
-- ingest weather observations
-- collect weather forecasts
+Operational:
+
+- BirdNET detections: BirdNET SQLite -> PostgreSQL
+- weather observations: Open-Meteo -> weather logger -> PostgreSQL
+
+Planned:
+
+- collect and store weather forecasts
 - configure database backups
 - connect PostgreSQL to Grafana
 - build historical analysis and prediction models
