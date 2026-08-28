@@ -88,7 +88,7 @@ while True:
                     )
                     """,
                     (
-                        current["logged_at"],
+                        current["time"],
                         "birdnet",
                         current.get("temperature_2m"),
                         current.get("relative_humidity_2m"),
