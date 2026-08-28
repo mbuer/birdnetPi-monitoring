@@ -50,3 +50,14 @@ Install the PostgreSQL Python driver used by the system Python environment:
 The weather service connects to the `birdnet` PostgreSQL database using the local PostgreSQL client configuration.
 
 Database credentials must not be stored in Git.
+
+### Weather timestamps
+
+The weather pipeline distinguishes between two timestamps:
+
+- `time` — the observation timestamp supplied by Open-Meteo
+- `logged_at` — the time the BirdNET Pi retrieved and logged the data
+
+PostgreSQL uses the Open-Meteo `time` value as `weather_observations.observed_at`.
+
+The JSONL weather log retains both values. This preserves the distinction between when the weather conditions apply and when the station retrieved them.
