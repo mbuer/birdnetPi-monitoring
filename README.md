@@ -1,12 +1,15 @@
 # BirdNET-Pi Monitoring
 
-Monitoring and observability configuration for a BirdNET-Pi station using Grafana Alloy, Grafana Cloud Loki, and a custom weather logger.
+Monitoring, observability, and long-term data collection for a BirdNET-Pi station using Grafana Alloy, Grafana Cloud Loki, PostgreSQL, and a custom weather logger.
 
 The goal of this repository is to make the custom monitoring environment reproducible. After rebuilding or replacing the BirdNET-Pi, the monitoring pipeline can be restored from this repository instead of being recreated manually.
 
 ## Architecture
 
-Two data sources are collected.
+Bird detections and weather data are collected through two complementary storage paths:
+
+- Grafana Cloud Loki for operational monitoring and recent log analysis
+- PostgreSQL for permanent structured history, analysis, and future prediction/ML
 
 ### BirdNET detections
 
@@ -82,6 +85,10 @@ The current weather configuration uses Fahrenheit and mph.
     │   ├── weather.py
     │   └── requirements.txt
     │
+    ├── database/
+    │   ├── schema.sql
+    │   └── README.md
+    │
     ├── systemd/
     │   ├── alloy.service.txt
     │   └── weather.service
@@ -119,11 +126,12 @@ The recommended restore order is:
 1. Install and verify BirdNET-Pi
 2. Clone this repository
 3. Restore the weather logger
-4. Install and configure Grafana Alloy
-5. Add Grafana Cloud credentials
-6. Start the services
-7. Import the Grafana dashboard
-8. Verify end-to-end ingestion
+4. Install and initialize PostgreSQL
+5. Install and configure Grafana Alloy
+6. Add Grafana Cloud credentials
+7. Start the services
+8. Import the Grafana dashboard
+9. Verify end-to-end ingestion
 
 Keeping BirdNET itself separate from this repository makes it easier to update or reinstall BirdNET without mixing application code with the monitoring configuration.
 
@@ -388,6 +396,8 @@ Historical weather logs can be backed up separately if preserving the local hist
 
 Grafana Cloud Loki remains the primary remote observability store.
 
+PostgreSQL provides the permanent structured dataset used for historical analysis and future prediction/ML. Database contents are runtime data and are not stored in Git.
+
 ---
 
 # Security
@@ -432,6 +442,14 @@ Alloy runtime state:
 
     /var/lib/alloy/data
 
+PostgreSQL schema:
+
+    database/schema.sql
+
+Database setup and recovery documentation:
+
+    database/README.md
+
 ---
 
 # Purpose
@@ -440,5 +458,6 @@ This repository is intended to serve as both:
 
 1. a backup of the custom BirdNET-Pi monitoring configuration
 2. documentation for rebuilding the observability stack from scratch
+3. definition of the long-term BirdNET and weather dataset used for historical analysis and future prediction/ML
 
 The BirdNET application itself is not backed up here. It should be installed from its appropriate upstream project first, after which this repository restores the custom monitoring layer.
