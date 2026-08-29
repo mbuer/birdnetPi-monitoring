@@ -558,19 +558,47 @@ These observations can eventually be joined with BirdNET detections by timestamp
 
 ### weather_forecasts
 
-The schema also contains:
+The `weather_forecasts` table stores historical snapshots of Open-Meteo hourly forecasts.
 
-    weather_forecasts
+Forecast collection is handled by:
 
-This table is intentionally separate from actual observations.
+    weather/forecast.py
 
-A future forecast record represents:
+and scheduled through:
 
-> What did the forecast predict at a particular point in time?
+    birdnet-forecast.timer
+        |
+        v
+    birdnet-forecast.service
+        |
+        v
+    weather/forecast.py
+        |
+        v
+    PostgreSQL weather_forecasts
 
-That distinction will eventually allow the project to compare predictions against what actually happened.
+The collector currently runs once per hour and requests a 48-hour hourly forecast.
 
-The table already supports fields such as:
+Each stored row contains two important timestamps:
+
+    forecast_created_at
+    forecast_for
+
+`forecast_created_at` identifies when the forecast snapshot was collected.
+
+`forecast_for` identifies the future hour being predicted.
+
+This means the same future hour can intentionally appear in many forecast snapshots.
+
+For example:
+
+    22:00 snapshot -> forecast for tomorrow 08:00
+    23:00 snapshot -> forecast for tomorrow 08:00
+    00:00 snapshot -> forecast for tomorrow 08:00
+
+Those rows are not duplicates. They represent how the forecast for the same future hour changed as time progressed.
+
+The table stores fields including:
 
 - forecast creation time
 - forecast target time
@@ -587,9 +615,7 @@ The table already supports fields such as:
 - UV index
 - weather code
 
-**Forecast ingestion has not been implemented yet.**
-
-The table exists so that the data model is ready when that phase begins.
+This historical forecast archive will later make it possible to compare forecasts with actual observations and to build bird-activity predictions using only information that was genuinely available at prediction time.
 
 ---
 
@@ -800,10 +826,13 @@ Long-term PostgreSQL visualization is a future phase.
     │   ├── birdnet-db-backup.service
     │   ├── birdnet-db-backup.timer
     │   ├── birdnet-db-sync.service
+    │   ├── birdnet-forecast.service
+    │   ├── birdnet-forecast.timer
     │   ├── birdnet-db-sync.timer
     │   └── weather.service
     │
     ├── weather/
+    │   ├── forecast.py
     │   ├── weather.py
     │   └── requirements.txt
     │
@@ -828,10 +857,11 @@ The recommended recovery order is:
 6. Restore the weather collector
 7. Restore BirdNET-to-PostgreSQL synchronization
 8. Restore automated database backups
-9. Install Grafana Alloy
-10. Restore Alloy configuration and credentials
-11. Import the Grafana dashboard
-12. Verify every data path
+9. Restore weather forecast collection
+10. Install Grafana Alloy
+11. Restore Alloy configuration and credentials
+12. Import the Grafana dashboard
+13. Verify every data path
 
 BirdNET should be working before this monitoring layer is restored.
 
@@ -1058,7 +1088,53 @@ The backup timer should remain active.
 
 ---
 
-## Step 9 — Install Grafana Alloy
+## Step 9 — Restore weather forecast collection
+
+Install the forecast service and timer:
+
+    sudo cp systemd/birdnet-forecast.service /etc/systemd/system/
+    sudo cp systemd/birdnet-forecast.timer /etc/systemd/system/
+
+Reload systemd:
+
+    sudo systemctl daemon-reload
+
+Enable the hourly timer:
+
+    sudo systemctl enable --now birdnet-forecast.timer
+
+The collector requests a 48-hour hourly forecast from Open-Meteo and stores one historical forecast snapshot per hour.
+
+Test the collector manually:
+
+    python3 weather/forecast.py
+
+Verify the timer:
+
+    systemctl status birdnet-forecast.timer --no-pager
+
+Inspect recent forecast runs:
+
+    journalctl -u birdnet-forecast.service -n 20 --no-pager
+
+Verify the database:
+
+    psql -h localhost -U birdnet -d birdnet -c "
+    SELECT
+        COUNT(*) AS rows,
+        COUNT(DISTINCT forecast_created_at) AS snapshots,
+        MAX(forecast_created_at) AS latest_snapshot,
+        MAX(forecast_for) AS forecast_horizon
+    FROM weather_forecasts;
+    "
+
+`birdnet-forecast.service` is a oneshot service and normally returns to `inactive (dead)` after a successful run.
+
+That is expected.
+
+---
+
+## Step 10 — Install Grafana Alloy
 
 Install Grafana Alloy using Grafana's official Debian/Raspberry Pi installation procedure.
 
@@ -1078,7 +1154,7 @@ It is retained primarily as documentation of the known-working installation.
 
 ---
 
-## Step 10 — Restore Alloy configuration
+## Step 11 — Restore Alloy configuration
 
 Create the configuration directory if necessary:
 
@@ -1115,7 +1191,7 @@ Inspect recent logs:
 
 ---
 
-## Step 11 — Restore Grafana
+## Step 12 — Restore Grafana
 
 Import:
 
@@ -1200,6 +1276,23 @@ Weather summary:
     journalctl -u birdnet-db-backup.service -n 20 --no-pager
 
     ls -lh ~/backups/postgresql
+
+---
+
+## Weather forecasts
+
+    systemctl status birdnet-forecast.timer --no-pager
+
+    journalctl -u birdnet-forecast.service -n 20 --no-pager
+
+    psql -h localhost -U birdnet -d birdnet -c "
+    SELECT
+        COUNT(*) AS rows,
+        COUNT(DISTINCT forecast_created_at) AS snapshots,
+        MAX(forecast_created_at) AS latest_snapshot,
+        MAX(forecast_for) AS forecast_horizon
+    FROM weather_forecasts;
+    "
 
 ---
 
@@ -1340,7 +1433,6 @@ Understanding what the project does **not** currently do is just as important as
 
 The current system does not yet:
 
-- ingest weather forecasts into PostgreSQL
 - use PostgreSQL as a Grafana datasource
 - generate bird-activity predictions
 - train machine-learning models
