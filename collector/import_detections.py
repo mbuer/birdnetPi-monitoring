@@ -70,7 +70,12 @@ VALUES (
     %s, %s, %s, %s, %s, %s,
     %s, %s, %s, %s, %s, %s, %s
 )
-ON CONFLICT (detected_at, species_latin, file_name)
+ON CONFLICT (
+    station_id,
+    detected_at,
+    species_latin,
+    file_name
+)
 DO NOTHING
 """
 
