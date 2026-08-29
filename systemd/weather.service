@@ -1,8 +1,9 @@
 # /etc/systemd/system/weather.service
+
 [Unit]
-Description=Weather Logger
-After=network-online.target
-Wants=network-online.target
+Description=BirdNET Weather Logger
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
 
 [Service]
 Type=simple
@@ -12,8 +13,6 @@ ExecStart=/usr/bin/python3 -u /home/birduser/weather/weather.py
 Restart=always
 RestartSec=30
 
-
-# Automatically create a log entry in the journal
 StandardOutput=journal
 StandardError=journal
 

@@ -1,3 +1,5 @@
+# /etc/systemd/system/birdnet-db-sync.timer
+
 [Unit]
 Description=Sync BirdNET detections to PostgreSQL every minute
 

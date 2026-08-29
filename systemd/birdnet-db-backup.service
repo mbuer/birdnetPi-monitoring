@@ -1,0 +1,12 @@
+# /etc/systemd/system/birdnet-db-backup.service
+
+[Unit]
+Description=Backup BirdNET PostgreSQL database
+Wants=postgresql.service
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=birduser
+ExecStart=/home/birduser/birdnetPi-monitoring/backup/backup_postgres.sh
+TimeoutStartSec=5min

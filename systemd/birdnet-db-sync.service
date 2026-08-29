@@ -1,5 +1,8 @@
+# /etc/systemd/system/birdnet-db-sync.service
+
 [Unit]
 Description=Sync BirdNET detections to PostgreSQL
+Wants=postgresql.service
 After=postgresql.service
 
 [Service]
@@ -7,3 +10,4 @@ Type=oneshot
 User=birduser
 WorkingDirectory=/home/birduser/birdnetPi-monitoring
 ExecStart=/usr/bin/python3 /home/birduser/birdnetPi-monitoring/collector/import_detections.py
+TimeoutStartSec=30

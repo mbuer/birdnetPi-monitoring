@@ -1,0 +1,12 @@
+# /etc/systemd/system/birdnet-db-backup.timer
+
+[Unit]
+Description=Daily BirdNET PostgreSQL backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
